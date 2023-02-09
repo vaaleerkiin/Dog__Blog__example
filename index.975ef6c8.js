@@ -638,6 +638,7 @@ const inlineGallery = (0, _lightgalleryDefault.default)(lgContainer, {
     hash: false,
     closeOnTap: true,
     escKey: true,
+    controls: true,
     closable: false,
     showMaximizeIcon: true,
     appendSubHtmlTo: ".lg-item",
@@ -677,7 +678,7 @@ function CreateDynemicEl() {
     });
 }
 
-},{"lightgallery":"lrONo","../plugins/autoplay/lg-autoplay.min":"e554u","../plugins/thumbnail/lg-thumbnail.min":"jSejr","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","./source/DynamicMainGallaryEl.json":"eQ9eW"}],"lrONo":[function(require,module,exports) {
+},{"lightgallery":"lrONo","../plugins/autoplay/lg-autoplay.min":"e554u","../plugins/thumbnail/lg-thumbnail.min":"jSejr","./source/DynamicMainGallaryEl.json":"eQ9eW","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"lrONo":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 /*!
