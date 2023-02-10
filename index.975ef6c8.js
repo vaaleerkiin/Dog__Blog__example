@@ -595,7 +595,19 @@ const inlineGallery = (0, _lightgalleryDefault.default)(lgContainer, {
         ...CreateDynemicEl()
     ]
 });
-inlineGallery.openGallery();
+// document.addEventListener(
+//   'scroll',
+//   () => {
+//     inlineGallery.openGallery();
+//     console.log('hell');
+//   },
+//   { once: true }
+// );
+// inlineGallery.openGallery();
+setTimeout(()=>{
+    inlineGallery.openGallery();
+    console.log("hell");
+}, 300);
 function SortElForDate() {
     const arr = (0, _dynamicMainGallaryElJsonDefault.default);
     return arr.sort((a, b)=>{
