@@ -2051,16 +2051,6 @@ body:not(.lg-from-hash) .lg-outer.lg-start-zoom .lg-item:not(.lg-zoomable).lg-co
   height: 300px;
 }
 
-.lg-img-wrap {
-  min-height: 100%;
-  position: absolute;
-  top: 0;
-}
-
-.lg-outer .lg-object {
-  min-height: 100%;
-}
-
 .soc {
   justify-content: center;
   align-items: center;
