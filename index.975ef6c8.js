@@ -142,15 +142,15 @@
       this[globalName] = mainExports;
     }
   }
-})({"1RB6v":[function(require,module,exports) {
-"use strict";
+})({"jC2qd":[function(require,module,exports) {
 var global = arguments[3];
 var HMR_HOST = null;
 var HMR_PORT = null;
 var HMR_SECURE = false;
 var HMR_ENV_HASH = "d6ea1d42532a7575";
 module.bundle.HMR_BUNDLE_ID = "890e741a975ef6c8";
-/* global HMR_HOST, HMR_PORT, HMR_ENV_HASH, HMR_SECURE, chrome, browser, importScripts */ /*::
+"use strict";
+/* global HMR_HOST, HMR_PORT, HMR_ENV_HASH, HMR_SECURE, chrome, browser, globalThis, __parcel__import__, __parcel__importScripts__, ServiceWorkerGlobalScope */ /*::
 import type {
   HMRAsset,
   HMRMessage,
@@ -158,7 +158,7 @@ import type {
 interface ParcelRequire {
   (string): mixed;
   cache: {|[string]: ParcelModule|};
-  hotData: mixed;
+  hotData: {|[string]: mixed|};
   Module: any;
   parent: ?ParcelRequire;
   isParcelRequire: true;
@@ -180,6 +180,8 @@ interface ParcelModule {
 interface ExtensionContext {
   runtime: {|
     reload(): void,
+    getURL(url: string): string;
+    getManifest(): {manifest_version: number, ...};
   |};
 }
 declare var module: {bundle: ParcelRequire, ...};
@@ -189,12 +191,16 @@ declare var HMR_ENV_HASH: string;
 declare var HMR_SECURE: boolean;
 declare var chrome: ExtensionContext;
 declare var browser: ExtensionContext;
+declare var __parcel__import__: (string) => Promise<void>;
+declare var __parcel__importScripts__: (string) => Promise<void>;
+declare var globalThis: typeof self;
+declare var ServiceWorkerGlobalScope: Object;
 */ var OVERLAY_ID = "__parcel__error__overlay__";
 var OldModule = module.bundle.Module;
 function Module(moduleName) {
     OldModule.call(this, moduleName);
     this.hot = {
-        data: module.bundle.hotData,
+        data: module.bundle.hotData[moduleName],
         _acceptCallbacks: [],
         _disposeCallbacks: [],
         accept: function(fn) {
@@ -204,10 +210,11 @@ function Module(moduleName) {
             this._disposeCallbacks.push(fn);
         }
     };
-    module.bundle.hotData = undefined;
+    module.bundle.hotData[moduleName] = undefined;
 }
 module.bundle.Module = Module;
-var checkedAssets, acceptedAssets, assetsToAccept /*: Array<[ParcelRequire, string]> */ ;
+module.bundle.hotData = {};
+var checkedAssets, assetsToDispose, assetsToAccept /*: Array<[ParcelRequire, string]> */ ;
 function getHostname() {
     return HMR_HOST || (location.protocol.indexOf("http") === 0 ? location.hostname : "localhost");
 }
@@ -219,7 +226,8 @@ if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== "undefined") {
     var hostname = getHostname();
     var port = getPort();
     var protocol = HMR_SECURE || location.protocol == "https:" && !/localhost|127.0.0.1|0.0.0.0/.test(hostname) ? "wss" : "ws";
-    var ws = new WebSocket(protocol + "://" + hostname + (port ? ":" + port : "") + "/"); // Safari doesn't support sourceURL in error stacks.
+    var ws = new WebSocket(protocol + "://" + hostname + (port ? ":" + port : "") + "/"); // Web extension context
+    var extCtx = typeof chrome === "undefined" ? typeof browser === "undefined" ? null : browser : chrome; // Safari doesn't support sourceURL in error stacks.
     // eval may also be disabled via CSP, so do a quick check.
     var supportsSourceURL = false;
     try {
@@ -229,8 +237,8 @@ if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== "undefined") {
     } // $FlowFixMe
     ws.onmessage = async function(event) {
         checkedAssets = {} /*: {|[string]: boolean|} */ ;
-        acceptedAssets = {} /*: {|[string]: boolean|} */ ;
         assetsToAccept = [];
+        assetsToDispose = [];
         var data = JSON.parse(event.data);
         if (data.type === "update") {
             // Remove error overlay if there is one
@@ -242,17 +250,24 @@ if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== "undefined") {
             if (handled) {
                 console.clear(); // Dispatch custom event so other runtimes (e.g React Refresh) are aware.
                 if (typeof window !== "undefined" && typeof CustomEvent !== "undefined") window.dispatchEvent(new CustomEvent("parcelhmraccept"));
-                await hmrApplyUpdates(assets);
-                for(var i = 0; i < assetsToAccept.length; i++){
-                    var id = assetsToAccept[i][1];
-                    if (!acceptedAssets[id]) hmrAcceptRun(assetsToAccept[i][0], id);
+                await hmrApplyUpdates(assets); // Dispose all old assets.
+                let processedAssets = {} /*: {|[string]: boolean|} */ ;
+                for(let i = 0; i < assetsToDispose.length; i++){
+                    let id = assetsToDispose[i][1];
+                    if (!processedAssets[id]) {
+                        hmrDispose(assetsToDispose[i][0], id);
+                        processedAssets[id] = true;
+                    }
+                } // Run accept callbacks. This will also re-execute other disposed assets in topological order.
+                processedAssets = {};
+                for(let i = 0; i < assetsToAccept.length; i++){
+                    let id = assetsToAccept[i][1];
+                    if (!processedAssets[id]) {
+                        hmrAccept(assetsToAccept[i][0], id);
+                        processedAssets[id] = true;
+                    }
                 }
-            } else if ("reload" in location) location.reload();
-            else {
-                // Web extension context
-                var ext = typeof chrome === "undefined" ? typeof browser === "undefined" ? null : browser : chrome;
-                if (ext && ext.runtime && ext.runtime.reload) ext.runtime.reload();
-            }
+            } else fullReload();
         }
         if (data.type === "error") {
             // Log parcel errors to console
@@ -279,7 +294,7 @@ function removeErrorOverlay() {
     var overlay = document.getElementById(OVERLAY_ID);
     if (overlay) {
         overlay.remove();
-        console.log("[parcel] \u2728 Error resolved");
+        console.log("[parcel] ✨ Error resolved");
     }
 }
 function createErrorOverlay(diagnostics) {
@@ -308,6 +323,10 @@ ${frame.code}`;
     errorHTML += "</div>";
     overlay.innerHTML = errorHTML;
     return overlay;
+}
+function fullReload() {
+    if ("reload" in location) location.reload();
+    else if (extCtx && extCtx.runtime && extCtx.runtime.reload) extCtx.runtime.reload();
 }
 function getParents(bundle, id) /*: Array<[ParcelRequire, string]> */ {
     var modules = bundle.modules;
@@ -349,6 +368,32 @@ function reloadCSS() {
         cssTimeout = null;
     }, 50);
 }
+function hmrDownload(asset) {
+    if (asset.type === "js") {
+        if (typeof document !== "undefined") {
+            let script = document.createElement("script");
+            script.src = asset.url + "?t=" + Date.now();
+            if (asset.outputFormat === "esmodule") script.type = "module";
+            return new Promise((resolve, reject)=>{
+                var _document$head;
+                script.onload = ()=>resolve(script);
+                script.onerror = reject;
+                (_document$head = document.head) === null || _document$head === void 0 || _document$head.appendChild(script);
+            });
+        } else if (typeof importScripts === "function") {
+            // Worker scripts
+            if (asset.outputFormat === "esmodule") return import(asset.url + "?t=" + Date.now());
+            else return new Promise((resolve, reject)=>{
+                try {
+                    importScripts(asset.url + "?t=" + Date.now());
+                    resolve();
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+    }
+}
 async function hmrApplyUpdates(assets) {
     global.parcelHotUpdate = Object.create(null);
     let scriptsToRemove;
@@ -361,24 +406,20 @@ async function hmrApplyUpdates(assets) {
         // This path is also taken if a CSP disallows eval.
         if (!supportsSourceURL) {
             let promises = assets.map((asset)=>{
-                if (asset.type === "js") {
-                    if (typeof document !== "undefined") {
-                        let script = document.createElement("script");
-                        script.src = asset.url;
-                        return new Promise((resolve, reject)=>{
-                            var _document$head;
-                            script.onload = ()=>resolve(script);
-                            script.onerror = reject;
-                            (_document$head = document.head) === null || _document$head === void 0 || _document$head.appendChild(script);
-                        });
-                    } else if (typeof importScripts === "function") return new Promise((resolve, reject)=>{
-                        try {
-                            importScripts(asset.url);
-                        } catch (err) {
-                            reject(err);
+                var _hmrDownload;
+                return (_hmrDownload = hmrDownload(asset)) === null || _hmrDownload === void 0 ? void 0 : _hmrDownload.catch((err)=>{
+                    // Web extension bugfix for Chromium
+                    // https://bugs.chromium.org/p/chromium/issues/detail?id=1255412#c12
+                    if (extCtx && extCtx.runtime && extCtx.runtime.getManifest().manifest_version == 3) {
+                        if (typeof ServiceWorkerGlobalScope != "undefined" && global instanceof ServiceWorkerGlobalScope) {
+                            extCtx.runtime.reload();
+                            return;
                         }
-                    });
-                }
+                        asset.url = extCtx.runtime.getURL("/__parcel_hmr_proxy__?url=" + encodeURIComponent(asset.url + "?t=" + Date.now()));
+                        return hmrDownload(asset);
+                    }
+                    throw err;
+                });
             });
             scriptsToRemove = await Promise.all(promises);
         }
@@ -415,6 +456,7 @@ function hmrApply(bundle, asset) {
             if (supportsSourceURL) // Global eval. We would use `new Function` here but browser
             // support for source maps is better with eval.
             (0, eval)(asset.output);
+             // $FlowFixMe
             let fn = global.parcelHotUpdate[asset.id];
             modules[asset.id] = [
                 fn,
@@ -423,23 +465,23 @@ function hmrApply(bundle, asset) {
         } else if (bundle.parent) hmrApply(bundle.parent, asset);
     }
 }
-function hmrDelete(bundle, id1) {
+function hmrDelete(bundle, id) {
     let modules = bundle.modules;
     if (!modules) return;
-    if (modules[id1]) {
+    if (modules[id]) {
         // Collect dependencies that will become orphaned when this module is deleted.
-        let deps = modules[id1][1];
+        let deps = modules[id][1];
         let orphans = [];
         for(let dep in deps){
             let parents = getParents(module.bundle.root, deps[dep]);
             if (parents.length === 1) orphans.push(deps[dep]);
         } // Delete the module. This must be done before deleting dependencies in case of circular dependencies.
-        delete modules[id1];
-        delete bundle.cache[id1]; // Now delete the orphans.
+        delete modules[id];
+        delete bundle.cache[id]; // Now delete the orphans.
         orphans.forEach((id)=>{
             hmrDelete(module.bundle.root, id);
         });
-    } else if (bundle.parent) hmrDelete(bundle.parent, id1);
+    } else if (bundle.parent) hmrDelete(bundle.parent, id);
 }
 function hmrAcceptCheck(bundle, id, depsByBundle) {
     if (hmrAcceptCheckOne(bundle, id, depsByBundle)) return true;
@@ -476,30 +518,42 @@ function hmrAcceptCheckOne(bundle, id, depsByBundle) {
     if (checkedAssets[id]) return true;
     checkedAssets[id] = true;
     var cached = bundle.cache[id];
-    assetsToAccept.push([
+    assetsToDispose.push([
         bundle,
         id
     ]);
-    if (!cached || cached.hot && cached.hot._acceptCallbacks.length) return true;
+    if (!cached || cached.hot && cached.hot._acceptCallbacks.length) {
+        assetsToAccept.push([
+            bundle,
+            id
+        ]);
+        return true;
+    }
 }
-function hmrAcceptRun(bundle, id) {
+function hmrDispose(bundle, id) {
     var cached = bundle.cache[id];
-    bundle.hotData = {};
-    if (cached && cached.hot) cached.hot.data = bundle.hotData;
+    bundle.hotData[id] = {};
+    if (cached && cached.hot) cached.hot.data = bundle.hotData[id];
     if (cached && cached.hot && cached.hot._disposeCallbacks.length) cached.hot._disposeCallbacks.forEach(function(cb) {
-        cb(bundle.hotData);
+        cb(bundle.hotData[id]);
     });
     delete bundle.cache[id];
-    bundle(id);
-    cached = bundle.cache[id];
+}
+function hmrAccept(bundle, id) {
+    // Execute the module.
+    bundle(id); // Run the accept callbacks in the new version of the module.
+    var cached = bundle.cache[id];
     if (cached && cached.hot && cached.hot._acceptCallbacks.length) cached.hot._acceptCallbacks.forEach(function(cb) {
         var assetsToAlsoAccept = cb(function() {
             return getParents(module.bundle.root, id);
         });
-        if (assetsToAlsoAccept && assetsToAccept.length) // $FlowFixMe[method-unbinding]
-        assetsToAccept.push.apply(assetsToAccept, assetsToAlsoAccept);
+        if (assetsToAlsoAccept && assetsToAccept.length) {
+            assetsToAlsoAccept.forEach(function(a) {
+                hmrDispose(a[0], a[1]);
+            }); // $FlowFixMe[method-unbinding]
+            assetsToAccept.push.apply(assetsToAccept, assetsToAlsoAccept);
+        }
     });
-    acceptedAssets[id] = true;
 }
 
 },{}],"8lqZg":[function(require,module,exports) {
@@ -507,10 +561,10 @@ var _mainGallary = require("./js/main-gallary");
 var _translate = require("./js/translate");
 var _burgerMenu = require("./js/burger-menu");
 var _news = require("./js/news");
+console.log("new");
 
-},{"./js/main-gallary":"lneWe","./js/burger-menu":"egJfa","./js/translate":"cybGd","./js/news":"2xmvE"}],"lneWe":[function(require,module,exports) {
+},{"./js/main-gallary":"lneWe","./js/translate":"cybGd","./js/burger-menu":"egJfa","./js/news":"2xmvE"}],"lneWe":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-// const Handlebars = require('handlebars');
 var _lightgallery = require("lightgallery");
 var _lightgalleryDefault = parcelHelpers.interopDefault(_lightgallery);
 var _lgAutoplayMin = require("../plugins/autoplay/lg-autoplay.min");
@@ -565,8 +619,6 @@ function CreateDynemicEl() {
 }
 
 },{"lightgallery":"lrONo","../plugins/autoplay/lg-autoplay.min":"e554u","../plugins/thumbnail/lg-thumbnail.min":"jSejr","./source/DynamicMainGallaryEl.json":"eQ9eW","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"lrONo":[function(require,module,exports) {
-var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
-parcelHelpers.defineInteropFlag(exports);
 /*!
  * lightgallery | 2.7.1 | January 11th 2023
  * http://www.lightgalleryjs.com/
@@ -585,7 +637,9 @@ INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
 LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
 OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
-***************************************************************************** */ var __assign = function() {
+***************************************************************************** */ var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
+parcelHelpers.defineInteropFlag(exports);
+var __assign = function() {
     __assign = Object.assign || function __assign(t) {
         for(var s, i = 1, n = arguments.length; i < n; i++){
             s = arguments[i];
@@ -713,7 +767,7 @@ var lightGalleryCoreSettings = {
 function initLgPolyfills() {
     (function() {
         if (typeof window.CustomEvent === "function") return false;
-        function CustomEvent(event, params) {
+        function CustomEvent1(event, params) {
             params = params || {
                 bubbles: false,
                 cancelable: false,
@@ -723,31 +777,31 @@ function initLgPolyfills() {
             evt.initCustomEvent(event, params.bubbles, params.cancelable, params.detail);
             return evt;
         }
-        window.CustomEvent = CustomEvent;
+        window.CustomEvent = CustomEvent1;
     })();
     (function() {
         if (!Element.prototype.matches) Element.prototype.matches = Element.prototype.msMatchesSelector || Element.prototype.webkitMatchesSelector;
     })();
 }
 var lgQuery = /** @class */ function() {
-    function lgQuery1(selector) {
+    function lgQuery(selector) {
         this.cssVenderPrefixes = [
             "TransitionDuration",
             "TransitionTimingFunction",
             "Transform",
-            "Transition", 
+            "Transition"
         ];
         this.selector = this._getSelector(selector);
         this.firstElement = this._getFirstEl();
         return this;
     }
-    lgQuery1.generateUUID = function() {
+    lgQuery.generateUUID = function() {
         return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
             var r = Math.random() * 16 | 0, v = c == "x" ? r : r & 0x3 | 0x8;
             return v.toString(16);
         });
     };
-    lgQuery1.prototype._getSelector = function(selector, context) {
+    lgQuery.prototype._getSelector = function(selector, context) {
         if (context === void 0) context = document;
         if (typeof selector !== "string") return selector;
         context = context || document;
@@ -755,13 +809,13 @@ var lgQuery = /** @class */ function() {
         if (fl === "#") return context.querySelector(selector);
         else return context.querySelectorAll(selector);
     };
-    lgQuery1.prototype._each = function(func) {
+    lgQuery.prototype._each = function(func) {
         if (!this.selector) return this;
         if (this.selector.length !== undefined) [].forEach.call(this.selector, func);
         else func(this.selector, 0);
         return this;
     };
-    lgQuery1.prototype._setCssVendorPrefix = function(el, cssProperty, value) {
+    lgQuery.prototype._setCssVendorPrefix = function(el, cssProperty, value) {
         // prettier-ignore
         var property = cssProperty.replace(/-([a-z])/gi, function(s, group1) {
             return group1.toUpperCase();
@@ -774,11 +828,11 @@ var lgQuery = /** @class */ function() {
             el.style["o" + property] = value;
         } else el.style[property] = value;
     };
-    lgQuery1.prototype._getFirstEl = function() {
+    lgQuery.prototype._getFirstEl = function() {
         if (this.selector && this.selector.length !== undefined) return this.selector[0];
         else return this.selector;
     };
-    lgQuery1.prototype.isEventMatched = function(event, eventName) {
+    lgQuery.prototype.isEventMatched = function(event, eventName) {
         var eventNamespace = eventName.split(".");
         return event.split(".").filter(function(e) {
             return e;
@@ -786,7 +840,7 @@ var lgQuery = /** @class */ function() {
             return eventNamespace.indexOf(e) !== -1;
         });
     };
-    lgQuery1.prototype.attr = function(attr, value) {
+    lgQuery.prototype.attr = function(attr, value) {
         if (value === undefined) {
             if (!this.firstElement) return "";
             return this.firstElement.getAttribute(attr);
@@ -796,23 +850,23 @@ var lgQuery = /** @class */ function() {
         });
         return this;
     };
-    lgQuery1.prototype.find = function(selector) {
+    lgQuery.prototype.find = function(selector) {
         return $LG(this._getSelector(selector, this.selector));
     };
-    lgQuery1.prototype.first = function() {
+    lgQuery.prototype.first = function() {
         if (this.selector && this.selector.length !== undefined) return $LG(this.selector[0]);
         else return $LG(this.selector);
     };
-    lgQuery1.prototype.eq = function(index) {
+    lgQuery.prototype.eq = function(index) {
         return $LG(this.selector[index]);
     };
-    lgQuery1.prototype.parent = function() {
+    lgQuery.prototype.parent = function() {
         return $LG(this.selector.parentElement);
     };
-    lgQuery1.prototype.get = function() {
+    lgQuery.prototype.get = function() {
         return this._getFirstEl();
     };
-    lgQuery1.prototype.removeAttr = function(attributes) {
+    lgQuery.prototype.removeAttr = function(attributes) {
         var attrs = attributes.split(" ");
         this._each(function(el) {
             attrs.forEach(function(attr) {
@@ -821,7 +875,7 @@ var lgQuery = /** @class */ function() {
         });
         return this;
     };
-    lgQuery1.prototype.wrap = function(className) {
+    lgQuery.prototype.wrap = function(className) {
         if (!this.firstElement) return this;
         var wrapper = document.createElement("div");
         wrapper.className = className;
@@ -830,7 +884,7 @@ var lgQuery = /** @class */ function() {
         wrapper.appendChild(this.firstElement);
         return this;
     };
-    lgQuery1.prototype.addClass = function(classNames) {
+    lgQuery.prototype.addClass = function(classNames) {
         if (classNames === void 0) classNames = "";
         this._each(function(el) {
             // IE doesn't support multiple arguments
@@ -840,7 +894,7 @@ var lgQuery = /** @class */ function() {
         });
         return this;
     };
-    lgQuery1.prototype.removeClass = function(classNames) {
+    lgQuery.prototype.removeClass = function(classNames) {
         this._each(function(el) {
             // IE doesn't support multiple arguments
             classNames.split(" ").forEach(function(className) {
@@ -849,21 +903,21 @@ var lgQuery = /** @class */ function() {
         });
         return this;
     };
-    lgQuery1.prototype.hasClass = function(className) {
+    lgQuery.prototype.hasClass = function(className) {
         if (!this.firstElement) return false;
         return this.firstElement.classList.contains(className);
     };
-    lgQuery1.prototype.hasAttribute = function(attribute) {
+    lgQuery.prototype.hasAttribute = function(attribute) {
         if (!this.firstElement) return false;
         return this.firstElement.hasAttribute(attribute);
     };
-    lgQuery1.prototype.toggleClass = function(className) {
+    lgQuery.prototype.toggleClass = function(className) {
         if (!this.firstElement) return this;
         if (this.hasClass(className)) this.removeClass(className);
         else this.addClass(className);
         return this;
     };
-    lgQuery1.prototype.css = function(property, value) {
+    lgQuery.prototype.css = function(property, value) {
         var _this = this;
         this._each(function(el) {
             _this._setCssVendorPrefix(el, property, value);
@@ -871,18 +925,18 @@ var lgQuery = /** @class */ function() {
         return this;
     };
     // Need to pass separate namespaces for separate elements
-    lgQuery1.prototype.on = function(events, listener) {
+    lgQuery.prototype.on = function(events, listener) {
         var _this = this;
         if (!this.selector) return this;
         events.split(" ").forEach(function(event) {
-            if (!Array.isArray(lgQuery1.eventListeners[event])) lgQuery1.eventListeners[event] = [];
-            lgQuery1.eventListeners[event].push(listener);
+            if (!Array.isArray(lgQuery.eventListeners[event])) lgQuery.eventListeners[event] = [];
+            lgQuery.eventListeners[event].push(listener);
             _this.selector.addEventListener(event.split(".")[0], listener);
         });
         return this;
     };
     // @todo - test this
-    lgQuery1.prototype.once = function(event, listener) {
+    lgQuery.prototype.once = function(event, listener) {
         var _this = this;
         this.on(event, function() {
             _this.off(event);
@@ -890,20 +944,20 @@ var lgQuery = /** @class */ function() {
         });
         return this;
     };
-    lgQuery1.prototype.off = function(event) {
+    lgQuery.prototype.off = function(event) {
         var _this = this;
         if (!this.selector) return this;
-        Object.keys(lgQuery1.eventListeners).forEach(function(eventName) {
+        Object.keys(lgQuery.eventListeners).forEach(function(eventName) {
             if (_this.isEventMatched(event, eventName)) {
-                lgQuery1.eventListeners[eventName].forEach(function(listener) {
+                lgQuery.eventListeners[eventName].forEach(function(listener) {
                     _this.selector.removeEventListener(eventName.split(".")[0], listener);
                 });
-                lgQuery1.eventListeners[eventName] = [];
+                lgQuery.eventListeners[eventName] = [];
             }
         });
         return this;
     };
-    lgQuery1.prototype.trigger = function(event, detail) {
+    lgQuery.prototype.trigger = function(event, detail) {
         if (!this.firstElement) return this;
         var customEvent = new CustomEvent(event.split(".")[0], {
             detail: detail || null
@@ -912,7 +966,7 @@ var lgQuery = /** @class */ function() {
         return this;
     };
     // Does not support IE
-    lgQuery1.prototype.load = function(url) {
+    lgQuery.prototype.load = function(url) {
         var _this = this;
         fetch(url).then(function(res) {
             return res.text();
@@ -921,7 +975,7 @@ var lgQuery = /** @class */ function() {
         });
         return this;
     };
-    lgQuery1.prototype.html = function(html) {
+    lgQuery.prototype.html = function(html) {
         if (html === undefined) {
             if (!this.firstElement) return "";
             return this.firstElement.innerHTML;
@@ -931,46 +985,46 @@ var lgQuery = /** @class */ function() {
         });
         return this;
     };
-    lgQuery1.prototype.append = function(html) {
+    lgQuery.prototype.append = function(html) {
         this._each(function(el) {
             if (typeof html === "string") el.insertAdjacentHTML("beforeend", html);
             else el.appendChild(html);
         });
         return this;
     };
-    lgQuery1.prototype.prepend = function(html) {
+    lgQuery.prototype.prepend = function(html) {
         this._each(function(el) {
             el.insertAdjacentHTML("afterbegin", html);
         });
         return this;
     };
-    lgQuery1.prototype.remove = function() {
+    lgQuery.prototype.remove = function() {
         this._each(function(el) {
             el.parentNode.removeChild(el);
         });
         return this;
     };
-    lgQuery1.prototype.empty = function() {
+    lgQuery.prototype.empty = function() {
         this._each(function(el) {
             el.innerHTML = "";
         });
         return this;
     };
-    lgQuery1.prototype.scrollTop = function(scrollTop) {
+    lgQuery.prototype.scrollTop = function(scrollTop) {
         if (scrollTop !== undefined) {
             document.body.scrollTop = scrollTop;
             document.documentElement.scrollTop = scrollTop;
             return this;
         } else return window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
     };
-    lgQuery1.prototype.scrollLeft = function(scrollLeft) {
+    lgQuery.prototype.scrollLeft = function(scrollLeft) {
         if (scrollLeft !== undefined) {
             document.body.scrollLeft = scrollLeft;
             document.documentElement.scrollLeft = scrollLeft;
             return this;
         } else return window.pageXOffset || document.documentElement.scrollLeft || document.body.scrollLeft || 0;
     };
-    lgQuery1.prototype.offset = function() {
+    lgQuery.prototype.offset = function() {
         if (!this.firstElement) return {
             left: 0,
             top: 0
@@ -983,22 +1037,22 @@ var lgQuery = /** @class */ function() {
             top: rect.top + this.scrollTop()
         };
     };
-    lgQuery1.prototype.style = function() {
+    lgQuery.prototype.style = function() {
         if (!this.firstElement) return {};
         return this.firstElement.currentStyle || window.getComputedStyle(this.firstElement);
     };
     // Width without padding and border even if box-sizing is used.
-    lgQuery1.prototype.width = function() {
+    lgQuery.prototype.width = function() {
         var style = this.style();
         return this.firstElement.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
     };
     // Height without padding and border even if box-sizing is used.
-    lgQuery1.prototype.height = function() {
+    lgQuery.prototype.height = function() {
         var style = this.style();
         return this.firstElement.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
     };
-    lgQuery1.eventListeners = {};
-    return lgQuery1;
+    lgQuery.eventListeners = {};
+    return lgQuery;
 }();
 function $LG(selector) {
     initLgPolyfills();
@@ -1028,7 +1082,7 @@ var defaultDynamicOptions = [
     "pinterestText",
     "fbHtml",
     "disqusIdentifier",
-    "disqusUrl", 
+    "disqusUrl"
 ];
 // Convert html data-attribute to camalcase
 function convertToData(attr) {
@@ -1238,7 +1292,7 @@ var utils = {
 // Unique id for each gallery
 var lgId = 0;
 var LightGallery = /** @class */ function() {
-    function LightGallery1(element, options) {
+    function LightGallery(element, options) {
         this.lgOpened = false;
         this.index = 0;
         // lightGallery modules
@@ -1273,7 +1327,7 @@ var LightGallery = /** @class */ function() {
         this.validateLicense();
         return this;
     }
-    LightGallery1.prototype.generateSettings = function(options) {
+    LightGallery.prototype.generateSettings = function(options) {
         // lightGallery settings
         this.settings = __assign(__assign({}, lightGalleryCoreSettings), options);
         if (this.settings.isMobile && typeof this.settings.isMobile === "function" ? this.settings.isMobile() : utils.isMobile()) {
@@ -1281,7 +1335,7 @@ var LightGallery = /** @class */ function() {
             this.settings = __assign(__assign({}, this.settings), mobileSettings);
         }
     };
-    LightGallery1.prototype.normalizeSettings = function() {
+    LightGallery.prototype.normalizeSettings = function() {
         if (this.settings.slideEndAnimation) this.settings.hideControlOnEnd = false;
         if (!this.settings.closable) this.settings.swipeToClose = false;
         // And reset it on close to get the correct value next time
@@ -1293,7 +1347,7 @@ var LightGallery = /** @class */ function() {
         // settings.preload should not be grater than $item.length
         this.settings.preload = Math.min(this.settings.preload, this.galleryItems.length);
     };
-    LightGallery1.prototype.init = function() {
+    LightGallery.prototype.init = function() {
         var _this = this;
         this.addSlideVideoInfo(this.galleryItems);
         this.buildStructure();
@@ -1310,7 +1364,7 @@ var LightGallery = /** @class */ function() {
         if (this.settings.mousewheel) this.mousewheel();
         if (!this.settings.dynamic) this.openGalleryOnItemClick();
     };
-    LightGallery1.prototype.openGalleryOnItemClick = function() {
+    LightGallery.prototype.openGalleryOnItemClick = function() {
         var _this = this;
         var _loop_1 = function(index) {
             var element = this_1.items[index];
@@ -1326,40 +1380,40 @@ var LightGallery = /** @class */ function() {
         };
         var this_1 = this;
         // Using for loop instead of using bubbling as the items can be any html element.
-        for(var index1 = 0; index1 < this.items.length; index1++)_loop_1(index1);
+        for(var index = 0; index < this.items.length; index++)_loop_1(index);
     };
     /**
      * Module constructor
      * Modules are build incrementally.
      * Gallery should be opened only once all the modules are initialized.
      * use moduleBuildTimeout to make sure this
-     */ LightGallery1.prototype.buildModules = function() {
+     */ LightGallery.prototype.buildModules = function() {
         var _this = this;
         this.settings.plugins.forEach(function(plugin) {
             _this.plugins.push(new plugin(_this, $LG));
         });
     };
-    LightGallery1.prototype.validateLicense = function() {
+    LightGallery.prototype.validateLicense = function() {
         if (!this.settings.licenseKey) console.error("Please provide a valid license key");
         else if (this.settings.licenseKey === "0000-0000-000-0000") console.warn("lightGallery: " + this.settings.licenseKey + " license key is not valid for production use");
     };
-    LightGallery1.prototype.getSlideItem = function(index) {
+    LightGallery.prototype.getSlideItem = function(index) {
         return $LG(this.getSlideItemId(index));
     };
-    LightGallery1.prototype.getSlideItemId = function(index) {
+    LightGallery.prototype.getSlideItemId = function(index) {
         return "#lg-item-" + this.lgId + "-" + index;
     };
-    LightGallery1.prototype.getIdName = function(id) {
+    LightGallery.prototype.getIdName = function(id) {
         return id + "-" + this.lgId;
     };
-    LightGallery1.prototype.getElementById = function(id) {
+    LightGallery.prototype.getElementById = function(id) {
         return $LG("#" + this.getIdName(id));
     };
-    LightGallery1.prototype.manageSingleSlideClassName = function() {
+    LightGallery.prototype.manageSingleSlideClassName = function() {
         if (this.galleryItems.length < 2) this.outer.addClass("lg-single-item");
         else this.outer.removeClass("lg-single-item");
     };
-    LightGallery1.prototype.buildStructure = function() {
+    LightGallery.prototype.buildStructure = function() {
         var _this = this;
         var container = this.$container && this.$container.get();
         if (container) return;
@@ -1403,7 +1457,7 @@ var LightGallery = /** @class */ function() {
         this.toggleMaximize();
         this.initModules();
     };
-    LightGallery1.prototype.refreshOnResize = function() {
+    LightGallery.prototype.refreshOnResize = function() {
         if (this.lgOpened) {
             var currentGalleryItem = this.galleryItems[this.index];
             var __slideVideoInfo = currentGalleryItem.__slideVideoInfo;
@@ -1418,7 +1472,7 @@ var LightGallery = /** @class */ function() {
             this.LGel.trigger(lGEvents.containerResize);
         }
     };
-    LightGallery1.prototype.resizeVideoSlide = function(index, imageSize) {
+    LightGallery.prototype.resizeVideoSlide = function(index, imageSize) {
         var lgVideoStyle = this.getVideoContStyle(imageSize);
         var currentSlide = this.getSlideItem(index);
         currentSlide.find(".lg-video-cont").attr("style", lgVideoStyle);
@@ -1464,7 +1518,7 @@ var LightGallery = /** @class */ function() {
      * galleryItems.shift();
      * updateSlideInstance.updateSlides(galleryItems, 1);
      * @see <a href="/demos/update-slides/">Demo</a>
-     */ LightGallery1.prototype.updateSlides = function(items, index) {
+     */ LightGallery.prototype.updateSlides = function(items, index) {
         if (this.index > items.length - 1) this.index = items.length - 1;
         if (items.length === 1) this.index = 0;
         if (!items.length) {
@@ -1493,7 +1547,7 @@ var LightGallery = /** @class */ function() {
         this.LGel.trigger(lGEvents.updateSlides);
     };
     // Get gallery items based on multiple conditions
-    LightGallery1.prototype.getItems = function() {
+    LightGallery.prototype.getItems = function() {
         // Gallery items
         this.items = [];
         if (!this.settings.dynamic) {
@@ -1509,10 +1563,10 @@ var LightGallery = /** @class */ function() {
             return utils.getDynamicOptions(this.items, this.settings.extraProps, this.settings.getCaptionFromTitleOrAlt, this.settings.exThumbImage);
         } else return this.settings.dynamicEl || [];
     };
-    LightGallery1.prototype.shouldHideScrollbar = function() {
+    LightGallery.prototype.shouldHideScrollbar = function() {
         return this.settings.hideScrollbar && document.body === this.settings.container;
     };
-    LightGallery1.prototype.hideScrollbar = function() {
+    LightGallery.prototype.hideScrollbar = function() {
         if (!this.shouldHideScrollbar()) return;
         this.bodyPaddingRight = parseFloat($LG("body").style().paddingRight);
         var bodyRect = document.documentElement.getBoundingClientRect();
@@ -1520,7 +1574,7 @@ var LightGallery = /** @class */ function() {
         $LG(document.body).css("padding-right", scrollbarWidth + this.bodyPaddingRight + "px");
         $LG(document.body).addClass("lg-overlay-open");
     };
-    LightGallery1.prototype.resetScrollBar = function() {
+    LightGallery.prototype.resetScrollBar = function() {
         if (!this.shouldHideScrollbar()) return;
         $LG(document.body).css("padding-right", this.bodyPaddingRight + "px");
         $LG(document.body).removeClass("lg-overlay-open");
@@ -1552,7 +1606,7 @@ var LightGallery = /** @class */ function() {
      *     dynamicGallery.openGallery(2);
      * });
      *
-     */ LightGallery1.prototype.openGallery = function(index, element) {
+     */ LightGallery.prototype.openGallery = function(index, element) {
         var _this = this;
         if (index === void 0) index = this.settings.index;
         // prevent accidental double execution
@@ -1630,7 +1684,7 @@ var LightGallery = /** @class */ function() {
      * Therefore, The height of the caption is calculated dynamically, only once based on the first slide caption.
      * if you have dynamic captions for each media,
      * you can provide an appropriate height for the captions via allowMediaOverlap option
-     */ LightGallery1.prototype.getMediaContainerPosition = function() {
+     */ LightGallery.prototype.getMediaContainerPosition = function() {
         if (this.settings.allowMediaOverlap) return {
             top: 0,
             bottom: 0
@@ -1646,12 +1700,12 @@ var LightGallery = /** @class */ function() {
             bottom: bottom
         };
     };
-    LightGallery1.prototype.setMediaContainerPosition = function(top, bottom) {
+    LightGallery.prototype.setMediaContainerPosition = function(top, bottom) {
         if (top === void 0) top = 0;
         if (bottom === void 0) bottom = 0;
         this.$content.css("top", top + "px").css("bottom", bottom + "px");
     };
-    LightGallery1.prototype.hideBars = function() {
+    LightGallery.prototype.hideBars = function() {
         var _this = this;
         // Hide controllers if mouse doesn't move for some period
         setTimeout(function() {
@@ -1669,7 +1723,7 @@ var LightGallery = /** @class */ function() {
             }
         }, this.settings.showBarsAfter);
     };
-    LightGallery1.prototype.initPictureFill = function($img) {
+    LightGallery.prototype.initPictureFill = function($img) {
         if (this.settings.supportLegacyBrowser) try {
             picturefill({
                 elements: [
@@ -1683,7 +1737,7 @@ var LightGallery = /** @class */ function() {
     /**
      *  @desc Create image counter
      *  Ex: 1/10
-     */ LightGallery1.prototype.counter = function() {
+     */ LightGallery.prototype.counter = function() {
         if (this.settings.counter) {
             var counterHtml = '<div class="lg-counter" role="status" aria-live="polite">\n                <span id="' + this.getIdName("lg-counter-current") + '" class="lg-counter-current">' + (this.index + 1) + ' </span> /\n                <span id="' + this.getIdName("lg-counter-all") + '" class="lg-counter-all">' + this.galleryItems.length + " </span></div>";
             this.outer.find(this.settings.appendCounterTo).append(counterHtml);
@@ -1692,7 +1746,7 @@ var LightGallery = /** @class */ function() {
     /**
      *  @desc add sub-html into the slide
      *  @param {Number} index - index of the slide
-     */ LightGallery1.prototype.addHtml = function(index) {
+     */ LightGallery.prototype.addHtml = function(index) {
         var subHtml;
         var subHtmlUrl;
         if (this.galleryItems[index].subHtmlUrl) subHtmlUrl = this.galleryItems[index].subHtmlUrl;
@@ -1729,7 +1783,7 @@ var LightGallery = /** @class */ function() {
      *  @desc Preload slides
      *  @param {Number} index - index of the slide
      * @todo preload not working for the first slide, Also, should work for the first and last slide as well
-     */ LightGallery1.prototype.preload = function(index) {
+     */ LightGallery.prototype.preload = function(index) {
         for(var i = 1; i <= this.settings.preload; i++){
             if (i >= this.galleryItems.length - index) break;
             this.loadContent(index + i, false);
@@ -1739,15 +1793,15 @@ var LightGallery = /** @class */ function() {
             this.loadContent(index - j, false);
         }
     };
-    LightGallery1.prototype.getDummyImgStyles = function(imageSize) {
+    LightGallery.prototype.getDummyImgStyles = function(imageSize) {
         if (!imageSize) return "";
         return "width:" + imageSize.width + "px;\n                margin-left: -" + imageSize.width / 2 + "px;\n                margin-top: -" + imageSize.height / 2 + "px;\n                height:" + imageSize.height + "px";
     };
-    LightGallery1.prototype.getVideoContStyle = function(imageSize) {
+    LightGallery.prototype.getVideoContStyle = function(imageSize) {
         if (!imageSize) return "";
         return "width:" + imageSize.width + "px;\n                height:" + imageSize.height + "px";
     };
-    LightGallery1.prototype.getDummyImageContent = function($currentSlide, index, alt) {
+    LightGallery.prototype.getDummyImageContent = function($currentSlide, index, alt) {
         var $currentItem;
         if (!this.settings.dynamic) $currentItem = $LG(this.items).eq(index);
         if ($currentItem) {
@@ -1763,7 +1817,7 @@ var LightGallery = /** @class */ function() {
         }
         return "";
     };
-    LightGallery1.prototype.setImgMarkup = function(src, $currentSlide, index) {
+    LightGallery.prototype.setImgMarkup = function(src, $currentSlide, index) {
         var currentGalleryItem = this.galleryItems[index];
         var alt = currentGalleryItem.alt, srcset = currentGalleryItem.srcset, sizes = currentGalleryItem.sizes, sources = currentGalleryItem.sources;
         // Use the thumbnail as dummy image which will be resized to actual image size and
@@ -1775,7 +1829,7 @@ var LightGallery = /** @class */ function() {
         var imgMarkup = '<picture class="lg-img-wrap"> ' + imgContent + "</picture>";
         $currentSlide.prepend(imgMarkup);
     };
-    LightGallery1.prototype.onSlideObjectLoad = function($slide, isHTML5VideoWithoutPoster, onLoad, onError) {
+    LightGallery.prototype.onSlideObjectLoad = function($slide, isHTML5VideoWithoutPoster, onLoad, onError) {
         var mediaObject = $slide.find(".lg-object").first();
         if (utils.isImageLoaded(mediaObject.get()) || isHTML5VideoWithoutPoster) onLoad();
         else {
@@ -1794,7 +1848,7 @@ var LightGallery = /** @class */ function() {
      * @param delay Delay is 0 except first time
      * @param speed Speed is same as delay, except it is 0 if gallery is opened via hash plugin
      * @param isFirstSlide
-     */ LightGallery1.prototype.onLgObjectLoad = function(currentSlide, index, delay, speed, isFirstSlide, isHTML5VideoWithoutPoster) {
+     */ LightGallery.prototype.onLgObjectLoad = function(currentSlide, index, delay, speed, isFirstSlide, isHTML5VideoWithoutPoster) {
         var _this = this;
         this.onSlideObjectLoad(currentSlide, isHTML5VideoWithoutPoster, function() {
             _this.triggerSlideItemLoad(currentSlide, index, delay, speed, isFirstSlide);
@@ -1803,7 +1857,7 @@ var LightGallery = /** @class */ function() {
             currentSlide.html('<span class="lg-error-msg">Oops... Failed to load content...</span>');
         });
     };
-    LightGallery1.prototype.triggerSlideItemLoad = function($currentSlide, index, delay, speed, isFirstSlide) {
+    LightGallery.prototype.triggerSlideItemLoad = function($currentSlide, index, delay, speed, isFirstSlide) {
         var _this = this;
         var currentGalleryItem = this.galleryItems[index];
         // Adding delay for video slides without poster for better performance and user experience
@@ -1818,11 +1872,11 @@ var LightGallery = /** @class */ function() {
             });
         }, _speed);
     };
-    LightGallery1.prototype.isFirstSlideWithZoomAnimation = function() {
+    LightGallery.prototype.isFirstSlideWithZoomAnimation = function() {
         return !!(!this.lGalleryOn && this.zoomFromOrigin && this.currentImageSize);
     };
     // Add video slideInfo
-    LightGallery1.prototype.addSlideVideoInfo = function(items) {
+    LightGallery.prototype.addSlideVideoInfo = function(items) {
         var _this = this;
         items.forEach(function(element, index) {
             element.__slideVideoInfo = utils.isVideo(element.src, !!element.video, index);
@@ -1834,7 +1888,7 @@ var LightGallery = /** @class */ function() {
      *  This is used to load content into slides that is not visible too
      *  @param {Number} index - index of the slide.
      *  @param {Boolean} rec - if true call loadcontent() function again.
-     */ LightGallery1.prototype.loadContent = function(index, rec) {
+     */ LightGallery.prototype.loadContent = function(index, rec) {
         var _this = this;
         var currentGalleryItem = this.galleryItems[index];
         var $currentSlide = $LG(this.getSlideItemId(index));
@@ -1946,7 +2000,7 @@ var LightGallery = /** @class */ function() {
      * @param index
      * @param $currentSlide
      * @param speed
-     */ LightGallery1.prototype.loadContentOnFirstSlideLoad = function(index, $currentSlide, speed) {
+     */ LightGallery.prototype.loadContentOnFirstSlideLoad = function(index, $currentSlide, speed) {
         var _this = this;
         setTimeout(function() {
             $currentSlide.find(".lg-dummy-img").remove();
@@ -1956,7 +2010,7 @@ var LightGallery = /** @class */ function() {
             _this.preload(index);
         }, speed + 300);
     };
-    LightGallery1.prototype.getItemsToBeInsertedToDom = function(index2, prevIndex, numberOfItems) {
+    LightGallery.prototype.getItemsToBeInsertedToDom = function(index, prevIndex, numberOfItems) {
         var _this = this;
         if (numberOfItems === void 0) numberOfItems = 0;
         var itemsToBeInsertedToDom = [];
@@ -1970,23 +2024,23 @@ var LightGallery = /** @class */ function() {
             });
             return itemsToBeInsertedToDom;
         }
-        if (index2 < (this.galleryItems.length - 1) / 2) {
-            for(var idx = index2; idx > index2 - possibleNumberOfItems / 2 && idx >= 0; idx--)itemsToBeInsertedToDom.push("lg-item-" + this.lgId + "-" + idx);
+        if (index < (this.galleryItems.length - 1) / 2) {
+            for(var idx = index; idx > index - possibleNumberOfItems / 2 && idx >= 0; idx--)itemsToBeInsertedToDom.push("lg-item-" + this.lgId + "-" + idx);
             var numberOfExistingItems = itemsToBeInsertedToDom.length;
-            for(var idx = 0; idx < possibleNumberOfItems - numberOfExistingItems; idx++)itemsToBeInsertedToDom.push("lg-item-" + this.lgId + "-" + (index2 + idx + 1));
+            for(var idx = 0; idx < possibleNumberOfItems - numberOfExistingItems; idx++)itemsToBeInsertedToDom.push("lg-item-" + this.lgId + "-" + (index + idx + 1));
         } else {
-            for(var idx = index2; idx <= this.galleryItems.length - 1 && idx < index2 + possibleNumberOfItems / 2; idx++)itemsToBeInsertedToDom.push("lg-item-" + this.lgId + "-" + idx);
+            for(var idx = index; idx <= this.galleryItems.length - 1 && idx < index + possibleNumberOfItems / 2; idx++)itemsToBeInsertedToDom.push("lg-item-" + this.lgId + "-" + idx);
             var numberOfExistingItems = itemsToBeInsertedToDom.length;
-            for(var idx = 0; idx < possibleNumberOfItems - numberOfExistingItems; idx++)itemsToBeInsertedToDom.push("lg-item-" + this.lgId + "-" + (index2 - idx - 1));
+            for(var idx = 0; idx < possibleNumberOfItems - numberOfExistingItems; idx++)itemsToBeInsertedToDom.push("lg-item-" + this.lgId + "-" + (index - idx - 1));
         }
         if (this.settings.loop) {
-            if (index2 === this.galleryItems.length - 1) itemsToBeInsertedToDom.push("lg-item-" + this.lgId + "-" + 0);
-            else if (index2 === 0) itemsToBeInsertedToDom.push("lg-item-" + this.lgId + "-" + (this.galleryItems.length - 1));
+            if (index === this.galleryItems.length - 1) itemsToBeInsertedToDom.push("lg-item-" + this.lgId + "-" + 0);
+            else if (index === 0) itemsToBeInsertedToDom.push("lg-item-" + this.lgId + "-" + (this.galleryItems.length - 1));
         }
         if (itemsToBeInsertedToDom.indexOf(prevIndexItem) === -1) itemsToBeInsertedToDom.push("lg-item-" + this.lgId + "-" + prevIndex);
         return itemsToBeInsertedToDom;
     };
-    LightGallery1.prototype.organizeSlideItems = function(index, prevIndex) {
+    LightGallery.prototype.organizeSlideItems = function(index, prevIndex) {
         var _this = this;
         var itemsToBeInsertedToDom = this.getItemsToBeInsertedToDom(index, prevIndex, this.settings.numberOfSlideItemsInDom);
         itemsToBeInsertedToDom.forEach(function(item) {
@@ -1999,7 +2053,7 @@ var LightGallery = /** @class */ function() {
     };
     /**
      * Get previous index of the slide
-     */ LightGallery1.prototype.getPreviousSlideIndex = function() {
+     */ LightGallery.prototype.getPreviousSlideIndex = function() {
         var prevIndex = 0;
         try {
             var currentItemId = this.outer.find(".lg-current").first().attr("id");
@@ -2009,7 +2063,7 @@ var LightGallery = /** @class */ function() {
         }
         return prevIndex;
     };
-    LightGallery1.prototype.setDownloadValue = function(index) {
+    LightGallery.prototype.setDownloadValue = function(index) {
         if (this.settings.download) {
             var currentGalleryItem = this.galleryItems[index];
             var hideDownloadBtn = currentGalleryItem.downloadUrl === false || currentGalleryItem.downloadUrl === "false";
@@ -2022,7 +2076,7 @@ var LightGallery = /** @class */ function() {
             }
         }
     };
-    LightGallery1.prototype.makeSlideAnimation = function(direction, currentSlideItem, previousSlideItem) {
+    LightGallery.prototype.makeSlideAnimation = function(direction, currentSlideItem, previousSlideItem) {
         var _this = this;
         if (this.lGalleryOn) previousSlideItem.addClass("lg-slide-progress");
         setTimeout(function() {
@@ -2059,7 +2113,7 @@ var LightGallery = /** @class */ function() {
      *  // to go to 3rd slide
      *  plugin.slide(2);
      *
-     */ LightGallery1.prototype.slide = function(index, fromTouch, fromThumb, direction) {
+     */ LightGallery.prototype.slide = function(index, fromTouch, fromThumb, direction) {
         var _this = this;
         var prevIndex = this.getPreviousSlideIndex();
         this.currentItemsInDom = this.organizeSlideItems(index, prevIndex);
@@ -2137,18 +2191,18 @@ var LightGallery = /** @class */ function() {
         }
         this.index = index;
     };
-    LightGallery1.prototype.updateCurrentCounter = function(index) {
+    LightGallery.prototype.updateCurrentCounter = function(index) {
         this.getElementById("lg-counter-current").html(index + 1 + "");
     };
-    LightGallery1.prototype.updateCounterTotal = function() {
+    LightGallery.prototype.updateCounterTotal = function() {
         this.getElementById("lg-counter-all").html(this.galleryItems.length + "");
     };
-    LightGallery1.prototype.getSlideType = function(item) {
+    LightGallery.prototype.getSlideType = function(item) {
         if (item.__slideVideoInfo) return "video";
         else if (item.iframe) return "iframe";
         else return "image";
     };
-    LightGallery1.prototype.touchMove = function(startCoords, endCoords, e) {
+    LightGallery.prototype.touchMove = function(startCoords, endCoords, e) {
         var distanceX = endCoords.pageX - startCoords.pageX;
         var distanceY = endCoords.pageY - startCoords.pageY;
         var allowSwipe = false;
@@ -2188,7 +2242,7 @@ var LightGallery = /** @class */ function() {
             }
         }
     };
-    LightGallery1.prototype.touchEnd = function(endCoords, startCoords, event) {
+    LightGallery.prototype.touchEnd = function(endCoords, startCoords, event) {
         var _this = this;
         var distance;
         // keep slide animation for any mode while dragg/swipe
@@ -2228,7 +2282,7 @@ var LightGallery = /** @class */ function() {
             if (!_this.outer.hasClass("lg-dragging") && _this.settings.mode !== "lg-slide") _this.outer.removeClass("lg-slide");
         }, this.settings.speed + 100);
     };
-    LightGallery1.prototype.enableSwipe = function() {
+    LightGallery.prototype.enableSwipe = function() {
         var _this = this;
         var startCoords = {};
         var endCoords = {};
@@ -2273,7 +2327,7 @@ var LightGallery = /** @class */ function() {
             });
         }
     };
-    LightGallery1.prototype.enableDrag = function() {
+    LightGallery.prototype.enableDrag = function() {
         var _this = this;
         var startCoords = {};
         var endCoords = {};
@@ -2330,13 +2384,13 @@ var LightGallery = /** @class */ function() {
             });
         }
     };
-    LightGallery1.prototype.triggerPosterClick = function() {
+    LightGallery.prototype.triggerPosterClick = function() {
         var _this = this;
         this.$inner.on("click.lg", function(event) {
             if (!_this.dragOrSwipeEnabled && _this.isPosterElement($LG(event.target))) _this.LGel.trigger(lGEvents.posterClick);
         });
     };
-    LightGallery1.prototype.manageSwipeClass = function() {
+    LightGallery.prototype.manageSwipeClass = function() {
         var _touchNext = this.index + 1;
         var _touchPrev = this.index - 1;
         if (this.settings.loop && this.galleryItems.length > 2) {
@@ -2355,7 +2409,7 @@ var LightGallery = /** @class */ function() {
      *  const plugin = lightGallery();
      *  plugin.goToNextSlide();
      * @see <a href="/demos/methods/">Demo</a>
-     */ LightGallery1.prototype.goToNextSlide = function(fromTouch) {
+     */ LightGallery.prototype.goToNextSlide = function(fromTouch) {
         var _this = this;
         var _loop = this.settings.loop;
         if (fromTouch && this.galleryItems.length < 3) _loop = false;
@@ -2391,7 +2445,7 @@ var LightGallery = /** @class */ function() {
      *  plugin.goToPrevSlide();
      * @see <a href="/demos/methods/">Demo</a>
      *
-     */ LightGallery1.prototype.goToPrevSlide = function(fromTouch) {
+     */ LightGallery.prototype.goToPrevSlide = function(fromTouch) {
         var _this = this;
         var _loop = this.settings.loop;
         if (fromTouch && this.galleryItems.length < 3) _loop = false;
@@ -2420,7 +2474,7 @@ var LightGallery = /** @class */ function() {
             }
         }
     };
-    LightGallery1.prototype.keyPress = function() {
+    LightGallery.prototype.keyPress = function() {
         var _this = this;
         $LG(window).on("keydown.lg.global" + this.lgId, function(e) {
             if (_this.lgOpened && _this.settings.escKey === true && e.keyCode === 27) {
@@ -2440,7 +2494,7 @@ var LightGallery = /** @class */ function() {
             }
         });
     };
-    LightGallery1.prototype.arrow = function() {
+    LightGallery.prototype.arrow = function() {
         var _this = this;
         this.getElementById("lg-prev").on("click.lg", function() {
             _this.goToPrevSlide();
@@ -2449,7 +2503,7 @@ var LightGallery = /** @class */ function() {
             _this.goToNextSlide();
         });
     };
-    LightGallery1.prototype.arrowDisable = function(index) {
+    LightGallery.prototype.arrowDisable = function(index) {
         // Disable arrows if settings.hideControlOnEnd is true
         if (!this.settings.loop && this.settings.hideControlOnEnd) {
             var $prev = this.getElementById("lg-prev");
@@ -2460,12 +2514,12 @@ var LightGallery = /** @class */ function() {
             else $prev.removeAttr("disabled").removeClass("disabled");
         }
     };
-    LightGallery1.prototype.setTranslate = function($el, xValue, yValue, scaleX, scaleY) {
+    LightGallery.prototype.setTranslate = function($el, xValue, yValue, scaleX, scaleY) {
         if (scaleX === void 0) scaleX = 1;
         if (scaleY === void 0) scaleY = 1;
         $el.css("transform", "translate3d(" + xValue + "px, " + yValue + "px, 0px) scale3d(" + scaleX + ", " + scaleY + ", 1)");
     };
-    LightGallery1.prototype.mousewheel = function() {
+    LightGallery.prototype.mousewheel = function() {
         var _this = this;
         var lastCall = 0;
         this.outer.on("wheel.lg", function(e) {
@@ -2478,31 +2532,31 @@ var LightGallery = /** @class */ function() {
             else if (e.deltaY < 0) _this.goToPrevSlide();
         });
     };
-    LightGallery1.prototype.isSlideElement = function(target) {
+    LightGallery.prototype.isSlideElement = function(target) {
         return target.hasClass("lg-outer") || target.hasClass("lg-item") || target.hasClass("lg-img-wrap");
     };
-    LightGallery1.prototype.isPosterElement = function(target) {
+    LightGallery.prototype.isPosterElement = function(target) {
         var playButton = this.getSlideItem(this.index).find(".lg-video-play-button").get();
         return target.hasClass("lg-video-poster") || target.hasClass("lg-video-play-button") || playButton && playButton.contains(target.get());
     };
     /**
      * Maximize minimize inline gallery.
      * @category lGPublicMethods
-     */ LightGallery1.prototype.toggleMaximize = function() {
+     */ LightGallery.prototype.toggleMaximize = function() {
         var _this = this;
         this.getElementById("lg-maximize").on("click.lg", function() {
             _this.$container.toggleClass("lg-inline");
             _this.refreshOnResize();
         });
     };
-    LightGallery1.prototype.invalidateItems = function() {
+    LightGallery.prototype.invalidateItems = function() {
         for(var index = 0; index < this.items.length; index++){
             var element = this.items[index];
             var $element = $LG(element);
             $element.off("click.lgcustom-item-" + $element.attr("data-lg-id"));
         }
     };
-    LightGallery1.prototype.trapFocus = function() {
+    LightGallery.prototype.trapFocus = function() {
         var _this = this;
         this.$container.get().focus({
             preventScroll: true
@@ -2525,7 +2579,7 @@ var LightGallery = /** @class */ function() {
             }
         });
     };
-    LightGallery1.prototype.manageCloseGallery = function() {
+    LightGallery.prototype.manageCloseGallery = function() {
         var _this = this;
         if (!this.settings.closable) return;
         var mousedown = false;
@@ -2561,7 +2615,7 @@ var LightGallery = /** @class */ function() {
      *  const plugin = lightGallery();
      *  plugin.closeGallery();
      *
-     */ LightGallery1.prototype.closeGallery = function(force) {
+     */ LightGallery.prototype.closeGallery = function(force) {
         var _this = this;
         if (!this.lgOpened || !this.settings.closable && !force) return 0;
         this.LGel.trigger(lGEvents.beforeClose);
@@ -2617,7 +2671,7 @@ var LightGallery = /** @class */ function() {
         }, removeTimeout + 100);
         return removeTimeout + 100;
     };
-    LightGallery1.prototype.initModules = function() {
+    LightGallery.prototype.initModules = function() {
         this.plugins.forEach(function(module) {
             try {
                 module.init();
@@ -2626,7 +2680,7 @@ var LightGallery = /** @class */ function() {
             }
         });
     };
-    LightGallery1.prototype.destroyModules = function(destroy) {
+    LightGallery.prototype.destroyModules = function(destroy) {
         this.plugins.forEach(function(module) {
             try {
                 if (destroy) module.destroy();
@@ -2649,7 +2703,7 @@ var LightGallery = /** @class */ function() {
      *  // Delete or add children, then call
      *  plugin.refresh();
      *
-     */ LightGallery1.prototype.refresh = function(galleryItems) {
+     */ LightGallery.prototype.refresh = function(galleryItems) {
         if (!this.settings.dynamic) this.invalidateItems();
         if (galleryItems) this.galleryItems = galleryItems;
         else this.galleryItems = this.getItems();
@@ -2657,12 +2711,12 @@ var LightGallery = /** @class */ function() {
         this.openGalleryOnItemClick();
         this.LGel.trigger(lGEvents.updateSlides);
     };
-    LightGallery1.prototype.updateControls = function() {
+    LightGallery.prototype.updateControls = function() {
         this.addSlideVideoInfo(this.galleryItems);
         this.updateCounterTotal();
         this.manageSingleSlideClassName();
     };
-    LightGallery1.prototype.destroyGallery = function() {
+    LightGallery.prototype.destroyGallery = function() {
         this.destroyModules(true);
         if (!this.settings.dynamic) this.invalidateItems();
         $LG(window).off(".lg.global" + this.lgId);
@@ -2681,13 +2735,13 @@ var LightGallery = /** @class */ function() {
      *  const plugin = lightGallery();
      *  plugin.destroy();
      *
-     */ LightGallery1.prototype.destroy = function() {
+     */ LightGallery.prototype.destroy = function() {
         var closeTimeout = this.closeGallery(true);
         if (closeTimeout) setTimeout(this.destroyGallery.bind(this), closeTimeout);
         else this.destroyGallery();
         return closeTimeout;
     };
-    return LightGallery1;
+    return LightGallery;
 }();
 function lightGallery(el, options) {
     return new LightGallery(el, options);
@@ -2734,12 +2788,12 @@ exports.export = function(dest, destName, get) {
     module.exports = o();
 }(this, function() {
     "use strict";
-    var t1 = function() {
-        return (t1 = Object.assign || function(t) {
+    var t = function() {
+        return (t = Object.assign || function(t) {
             for(var o, e = 1, s = arguments.length; e < s; e++)for(var r in o = arguments[e])Object.prototype.hasOwnProperty.call(o, r) && (t[r] = o[r]);
             return t;
         }).apply(this, arguments);
-    }, o1 = "lgSlideItemLoad", e1 = "lgBeforeSlide", s1 = "lgAfterSlide", r1 = "lgDragStart", i = "lgDragEnd", a = "lgAutoplay", l = "lgAutoplayStart", n = "lgAutoplayStop", u = {
+    }, o = "lgSlideItemLoad", e = "lgBeforeSlide", s = "lgAfterSlide", r = "lgDragStart", i = "lgDragEnd", a = "lgAutoplay", l = "lgAutoplayStart", n = "lgAutoplayStop", u = {
         autoplay: !0,
         slideShowAutoplay: !1,
         slideShowInterval: 5e3,
@@ -2753,19 +2807,19 @@ exports.export = function(dest, destName, get) {
     };
     return function() {
         function p(o) {
-            return this.core = o, this.settings = t1(t1({}, u), this.core.settings), this;
+            return this.core = o, this.settings = t(t({}, u), this.core.settings), this;
         }
         return p.prototype.init = function() {
             var t = this;
-            this.settings.autoplay && (this.interval = !1, this.fromAuto = !0, this.pausedOnTouchDrag = !1, this.pausedOnSlideChange = !1, this.settings.autoplayControls && this.controls(), this.settings.progressBar && this.core.outer.append('<div class="lg-progress-bar"><div class="lg-progress"></div></div>'), this.settings.slideShowAutoplay && this.core.LGel.once(o1 + ".autoplay", function() {
+            this.settings.autoplay && (this.interval = !1, this.fromAuto = !0, this.pausedOnTouchDrag = !1, this.pausedOnSlideChange = !1, this.settings.autoplayControls && this.controls(), this.settings.progressBar && this.core.outer.append('<div class="lg-progress-bar"><div class="lg-progress"></div></div>'), this.settings.slideShowAutoplay && this.core.LGel.once(o + ".autoplay", function() {
                 t.startAutoPlay();
-            }), this.core.LGel.on(r1 + ".autoplay touchstart.lg.autoplay", function() {
+            }), this.core.LGel.on(r + ".autoplay touchstart.lg.autoplay", function() {
                 t.interval && (t.stopAutoPlay(), t.pausedOnTouchDrag = !0);
             }), this.core.LGel.on(i + ".autoplay touchend.lg.autoplay", function() {
                 !t.interval && t.pausedOnTouchDrag && (t.startAutoPlay(), t.pausedOnTouchDrag = !1);
-            }), this.core.LGel.on(e1 + ".autoplay", function() {
+            }), this.core.LGel.on(e + ".autoplay", function() {
                 t.showProgressBar(), !t.fromAuto && t.interval ? (t.stopAutoPlay(), t.pausedOnSlideChange = !0) : t.pausedOnSlideChange = !1, t.fromAuto = !1;
-            }), this.core.LGel.on(s1 + ".autoplay", function() {
+            }), this.core.LGel.on(s + ".autoplay", function() {
                 t.pausedOnSlideChange && !t.interval && t.settings.forceSlideShowAutoplay && (t.startAutoPlay(), t.pausedOnSlideChange = !1);
             }), this.showProgressBar());
         }, p.prototype.showProgressBar = function() {
@@ -2812,12 +2866,12 @@ exports.export = function(dest, destName, get) {
     module.exports = e();
 }(this, function() {
     "use strict";
-    var t1 = function() {
-        return (t1 = Object.assign || function(t) {
+    var t = function() {
+        return (t = Object.assign || function(t) {
             for(var e, i = 1, s = arguments.length; i < s; i++)for(var h in e = arguments[i])Object.prototype.hasOwnProperty.call(e, h) && (t[h] = e[h]);
             return t;
         }).apply(this, arguments);
-    }, e1 = {
+    }, e = {
         thumbnail: !0,
         animateThumb: !0,
         currentPagerPosition: "middle",
@@ -2835,17 +2889,17 @@ exports.export = function(dest, destName, get) {
         thumbnailPluginStrings: {
             toggleThumbnails: "Toggle thumbnails"
         }
-    }, i1 = "lgContainerResize", s1 = "lgUpdateSlides", h1 = "lgBeforeOpen", n = "lgBeforeSlide";
+    }, i = "lgContainerResize", s = "lgUpdateSlides", h = "lgBeforeOpen", n = "lgBeforeSlide";
     return function() {
         function o(t, e) {
             return this.thumbOuterWidth = 0, this.thumbTotalWidth = 0, this.translateX = 0, this.thumbClickable = !1, this.core = t, this.$LG = e, this;
         }
         return o.prototype.init = function() {
-            this.settings = t1(t1({}, e1), this.core.settings), this.thumbOuterWidth = 0, this.thumbTotalWidth = this.core.galleryItems.length * (this.settings.thumbWidth + this.settings.thumbMargin), this.translateX = 0, this.setAnimateThumbStyles(), this.core.settings.allowMediaOverlap || (this.settings.toggleThumb = !1), this.settings.thumbnail && (this.build(), this.settings.animateThumb ? (this.settings.enableThumbDrag && this.enableThumbDrag(), this.settings.enableThumbSwipe && this.enableThumbSwipe(), this.thumbClickable = !1) : this.thumbClickable = !0, this.toggleThumbBar(), this.thumbKeyPress());
+            this.settings = t(t({}, e), this.core.settings), this.thumbOuterWidth = 0, this.thumbTotalWidth = this.core.galleryItems.length * (this.settings.thumbWidth + this.settings.thumbMargin), this.translateX = 0, this.setAnimateThumbStyles(), this.core.settings.allowMediaOverlap || (this.settings.toggleThumb = !1), this.settings.thumbnail && (this.build(), this.settings.animateThumb ? (this.settings.enableThumbDrag && this.enableThumbDrag(), this.settings.enableThumbSwipe && this.enableThumbSwipe(), this.thumbClickable = !1) : this.thumbClickable = !0, this.toggleThumbBar(), this.thumbKeyPress());
         }, o.prototype.build = function() {
             var t = this;
-            this.setThumbMarkup(), this.manageActiveClassOnSlideChange(), this.$lgThumb.first().on("click.lg touchend.lg", function(e2) {
-                var i = t.$LG(e2.target);
+            this.setThumbMarkup(), this.manageActiveClassOnSlideChange(), this.$lgThumb.first().on("click.lg touchend.lg", function(e) {
+                var i = t.$LG(e.target);
                 i.hasAttribute("data-lg-item-id") && setTimeout(function() {
                     if (t.thumbClickable && !t.core.lgBusy) {
                         var e = parseInt(i.attr("data-lg-item-id"));
@@ -2855,11 +2909,11 @@ exports.export = function(dest, destName, get) {
             }), this.core.LGel.on(n + ".thumb", function(e) {
                 var i = e.detail.index;
                 t.animateThumb(i);
-            }), this.core.LGel.on(h1 + ".thumb", function() {
+            }), this.core.LGel.on(h + ".thumb", function() {
                 t.thumbOuterWidth = t.core.outer.get().offsetWidth;
-            }), this.core.LGel.on(s1 + ".thumb", function() {
+            }), this.core.LGel.on(s + ".thumb", function() {
                 t.rebuildThumbnails();
-            }), this.core.LGel.on(i1 + ".thumb", function() {
+            }), this.core.LGel.on(i + ".thumb", function() {
                 t.core.lgOpened && setTimeout(function() {
                     t.thumbOuterWidth = t.core.outer.get().offsetWidth, t.animateThumb(t.core.index), t.thumbOuterWidth = t.core.outer.get().offsetWidth;
                 }, 50);
@@ -2975,6 +3029,82 @@ exports.export = function(dest, destName, get) {
 },{}],"eQ9eW":[function(require,module,exports) {
 module.exports = JSON.parse('[{"src":"images/brabanson/photo_2023-02-08_17-29-47.jpg","thumb":"images/brabanson/photo_2023-02-08_17-29-47.jpg","header":"","description":"","date":"2023/02/08/17:22"},{"src":"images/brabanson/photo_2023-02-08_17-30-06.jpg","thumb":"images/brabanson/photo_2023-02-08_17-30-06.jpg","header":"","description":"","date":"2023/02/08/17:13"},{"src":"images/brabanson/photo_2023-02-08_17-30-12.jpg","thumb":"images/brabanson/photo_2023-02-08_17-30-12.jpg","header":"","description":"","date":"2023/02/08/17:29"},{"src":"images/brabanson/photo_2023-02-08_17-30-16.jpg","thumb":"images/brabanson/photo_2023-02-08_17-30-16.jpg","header":"","description":"","date":"2023/02/08/17:46"},{"src":"images/brabanson/photo_2023-02-08_17-30-20.jpg","thumb":"images/brabanson/photo_2023-02-08_17-30-20.jpg","header":"","description":"","date":"2023/03/01/17:25"},{"src":"images/brabanson/photo_2023-02-08_17-30-24.jpg","thumb":"images/brabanson/photo_2023-02-08_17-30-24.jpg","header":"","description":"","date":"2023/02/08/16:28"},{"src":"images/brabanson/photo_2023-02-08_17-30-39.jpg","thumb":"images/brabanson/photo_2023-02-08_17-30-39.jpg","header":"","description":"","date":"2023/02/08/17:20"},{"src":"images/brabanson/photo_2023-02-08_17-30-42.jpg","thumb":"images/brabanson/photo_2023-02-08_17-30-42.jpg","header":"","description":"","date":"2023/02/08/17:31"}]');
 
+},{}],"cybGd":[function(require,module,exports) {
+const LangArr = {
+    lng__logo: {
+        ua: "Щоденник Пті брабансона",
+        en: `Brabanson's Dog Diary`
+    },
+    lng__aboutMe__nav: {
+        ua: "Про мене",
+        en: "About Me"
+    },
+    lng__news__nav: {
+        ua: "Новини",
+        en: "News"
+    },
+    lng__contact__nav: {
+        ua: "Контаки",
+        en: "Contacts"
+    },
+    lng__aboutMe__menu: {
+        ua: "Про мене",
+        en: "About Me"
+    },
+    lng__news__menu: {
+        ua: "Новини",
+        en: "News"
+    },
+    lng__contact__menu: {
+        ua: "Контаки",
+        en: "Contacts"
+    },
+    lng__heroTitle: {
+        ua: "Пті брабансон: блог собаки-компаньйона",
+        en: "Brabanson: Companion Dog Blog"
+    },
+    lng__heroText: {
+        ua: "Вітаємо на блозі нашої улюбленої собаки-компаньйона! Ми раді поділитися з вами нашими пригодами, враженнями та щоденним життям у сприятливому суспільстві з нашою веселою і доброю собачкою. Слідкуйте за нами та дізнавайтеся більше про нашу дружню команду!",
+        en: "Welcome to the blog of our beloved companion dog! We are happy to share with you our adventures, impressions, and daily life in a friendly society with our cheerful and good dog. Follow us and learn more about our friendly team!"
+    },
+    lng__inform__title: {
+        ua: "Про мене",
+        en: "About Me"
+    }
+};
+if (!localStorage.getItem("lang")) localStorage.setItem("lang", "en");
+const refs = {
+    navBtnEn: document.querySelector("#nav__en"),
+    navBtnUa: document.querySelector("#nav__ua"),
+    menuBtnEn: document.querySelector("#menu__en"),
+    menuBtnUa: document.querySelector("#menu__ua")
+};
+refs.navBtnEn.addEventListener("click", ()=>{
+    localStorage.setItem("lang", "en");
+    // ChangeLang();
+    location.reload();
+});
+refs.navBtnUa.addEventListener("click", ()=>{
+    localStorage.setItem("lang", "ua");
+    // ChangeLang();
+    location.reload();
+});
+refs.menuBtnEn.addEventListener("click", ()=>{
+    localStorage.setItem("lang", "en");
+    // ChangeLang();
+    location.reload();
+});
+refs.menuBtnUa.addEventListener("click", ()=>{
+    localStorage.setItem("lang", "ua");
+    // ChangeLang();
+    location.reload();
+});
+function ChangeLang() {
+    let lang = localStorage.getItem("lang");
+    for(const key in LangArr)document.querySelector(`.${key}`).innerHTML = LangArr[key][lang];
+}
+ChangeLang();
+
 },{}],"egJfa":[function(require,module,exports) {
 const refs = {
     openMenuBtn: document.querySelector("[data-menu-open]"),
@@ -2996,100 +3126,28 @@ function toggleModal() {
     refs.menu.classList.toggle("is-hidden-menu");
 }
 
-},{}],"cybGd":[function(require,module,exports) {
-const LangArr = {
-    lng__logo: {
-        ua: "\u0429\u043E\u0434\u0435\u043D\u043D\u0438\u043A \u041F\u0442\u0456 \u0431\u0440\u0430\u0431\u0430\u043D\u0441\u043E\u043D\u0430",
-        en: `Brabanson's Dog Diary`
-    },
-    lng__aboutMe__nav: {
-        ua: "\u041F\u0440\u043E \u043C\u0435\u043D\u0435",
-        en: "About Me"
-    },
-    lng__news__nav: {
-        ua: "\u041D\u043E\u0432\u0438\u043D\u0438",
-        en: "News"
-    },
-    lng__contact__nav: {
-        ua: "\u041A\u043E\u043D\u0442\u0430\u043A\u0438",
-        en: "Contacts"
-    },
-    lng__aboutMe__menu: {
-        ua: "\u041F\u0440\u043E \u043C\u0435\u043D\u0435",
-        en: "About Me"
-    },
-    lng__news__menu: {
-        ua: "\u041D\u043E\u0432\u0438\u043D\u0438",
-        en: "News"
-    },
-    lng__contact__menu: {
-        ua: "\u041A\u043E\u043D\u0442\u0430\u043A\u0438",
-        en: "Contacts"
-    },
-    lng__heroTitle: {
-        ua: "\u041F\u0442\u0456 \u0431\u0440\u0430\u0431\u0430\u043D\u0441\u043E\u043D: \u0431\u043B\u043E\u0433 \u0441\u043E\u0431\u0430\u043A\u0438-\u043A\u043E\u043C\u043F\u0430\u043D\u044C\u0439\u043E\u043D\u0430",
-        en: "Brabanson: Companion Dog Blog"
-    },
-    lng__heroText: {
-        ua: "\u0412\u0456\u0442\u0430\u0454\u043C\u043E \u043D\u0430 \u0431\u043B\u043E\u0437\u0456 \u043D\u0430\u0448\u043E\u0457 \u0443\u043B\u044E\u0431\u043B\u0435\u043D\u043E\u0457 \u0441\u043E\u0431\u0430\u043A\u0438-\u043A\u043E\u043C\u043F\u0430\u043D\u044C\u0439\u043E\u043D\u0430! \u041C\u0438 \u0440\u0430\u0434\u0456 \u043F\u043E\u0434\u0456\u043B\u0438\u0442\u0438\u0441\u044F \u0437 \u0432\u0430\u043C\u0438 \u043D\u0430\u0448\u0438\u043C\u0438 \u043F\u0440\u0438\u0433\u043E\u0434\u0430\u043C\u0438, \u0432\u0440\u0430\u0436\u0435\u043D\u043D\u044F\u043C\u0438 \u0442\u0430 \u0449\u043E\u0434\u0435\u043D\u043D\u0438\u043C \u0436\u0438\u0442\u0442\u044F\u043C \u0443 \u0441\u043F\u0440\u0438\u044F\u0442\u043B\u0438\u0432\u043E\u043C\u0443 \u0441\u0443\u0441\u043F\u0456\u043B\u044C\u0441\u0442\u0432\u0456 \u0437 \u043D\u0430\u0448\u043E\u044E \u0432\u0435\u0441\u0435\u043B\u043E\u044E \u0456 \u0434\u043E\u0431\u0440\u043E\u044E \u0441\u043E\u0431\u0430\u0447\u043A\u043E\u044E. \u0421\u043B\u0456\u0434\u043A\u0443\u0439\u0442\u0435 \u0437\u0430 \u043D\u0430\u043C\u0438 \u0442\u0430 \u0434\u0456\u0437\u043D\u0430\u0432\u0430\u0439\u0442\u0435\u0441\u044F \u0431\u0456\u043B\u044C\u0448\u0435 \u043F\u0440\u043E \u043D\u0430\u0448\u0443 \u0434\u0440\u0443\u0436\u043D\u044E \u043A\u043E\u043C\u0430\u043D\u0434\u0443!",
-        en: "Welcome to the blog of our beloved companion dog! We are happy to share with you our adventures, impressions, and daily life in a friendly society with our cheerful and good dog. Follow us and learn more about our friendly team!"
-    },
-    lng__inform__title: {
-        ua: "\u041F\u0440\u043E \u043C\u0435\u043D\u0435",
-        en: "About Me"
-    }
-};
-if (!localStorage.getItem("lang")) localStorage.setItem("lang", "ua");
-const refs = {
-    navBtnEn: document.querySelector("#nav__en"),
-    navBtnUa: document.querySelector("#nav__ua"),
-    menuBtnEn: document.querySelector("#menu__en"),
-    menuBtnUa: document.querySelector("#menu__ua")
-};
-refs.navBtnEn.addEventListener("click", ()=>{
-    localStorage.setItem("lang", "en");
-    ChangeLang();
-});
-refs.navBtnUa.addEventListener("click", ()=>{
-    localStorage.setItem("lang", "ua");
-    ChangeLang();
-});
-refs.menuBtnEn.addEventListener("click", ()=>{
-    localStorage.setItem("lang", "en");
-    ChangeLang();
-});
-refs.menuBtnUa.addEventListener("click", ()=>{
-    localStorage.setItem("lang", "ua");
-    ChangeLang();
-});
-function ChangeLang() {
-    let lang = localStorage.getItem("lang");
-    for(const key in LangArr)document.querySelector(`.${key}`).innerHTML = LangArr[key][lang];
-}
-ChangeLang();
-
 },{}],"2xmvE":[function(require,module,exports) {
 const allNews = [
     {
-        title: "\u0421\u044C\u043E\u0433\u043E\u0434\u043D\u0456 \u041F\u0442\u0456 \u0432\u043F\u0435\u0440\u0448\u0435 \u0432\u0456\u0434\u0432\u0456\u0434\u0430\u043B\u0430 \u043F\u043B\u044F\u0436 \u0437 \u0432\u043B\u0430\u0441\u043D\u0438\u043A\u043E\u043C! \u0412\u043E\u043D\u0430 \u0434\u0443\u0436\u0435 \u0437\u0430\u0434\u043E\u0432\u043E\u043B\u0435\u043D\u0430 \u0442\u0430 \u0432\u0435\u0441\u0435\u043B\u0430, \u043D\u0430\u0432\u0456\u0442\u044C \u043A\u0443\u043F\u0430\u043B\u0430\u0441\u044C \u0432 \u043C\u043E\u0440\u0456.",
+        title: "Сьогодні Пті вперше відвідала пляж з власником! Вона дуже задоволена та весела, навіть купалась в морі.",
         img: "https://zelenvsit.cx.ua/wp-content/uploads/2018/6/sif-2141.jpg",
         date: "20/7/2019"
     },
     {
-        title: "\u041C\u0438 \u0432\u0456\u0434\u043A\u0440\u0438\u043B\u0438 \u043D\u043E\u0432\u0443 \u0442\u0440\u0435\u043D\u0443\u0432\u0430\u043B\u044C\u043D\u0443 \u0434\u0456\u043B\u044F\u043D\u043A\u0443 \u0434\u043B\u044F \u041F\u0442\u0456! \u0412\u043E\u043D\u0430 \u0434\u0443\u0436\u0435 \u0437\u0430\u0445\u043E\u043F\u043B\u044E\u0454\u0442\u044C\u0441\u044F \u043D\u043E\u0432\u0438\u043C\u0438 \u0437\u0430\u0434\u0430\u0447\u0430\u043C\u0438 \u0442\u0430 \u0456\u0433\u0440\u0430\u043C\u0438.",
+        title: "Ми відкрили нову тренувальну ділянку для Пті! Вона дуже захоплюється новими задачами та іграми.",
         img: "http://i.otzovik.com/objects/b/100000/95554.png",
         date: "12/8/2022"
     },
     {
-        title: "\u0421\u044C\u043E\u0433\u043E\u0434\u043D\u0456 \u043C\u0438 \u0432\u0456\u0434\u0432\u0456\u0434\u0430\u043B\u0438 \u0432\u0435\u0442\u0435\u0440\u0438\u043D\u0430\u0440\u0430 \u0442\u0430 \u0432\u0441\u0435 \u0432\u0438\u044F\u0432\u0438\u043B\u043E\u0441\u044F \u0434\u043E\u0431\u0440\u0435 \u0437 \u041F\u0442\u0456. \u0412\u043E\u043D\u0430 \u0434\u0443\u0436\u0435 \u0432\u0435\u0441\u0435\u043B\u0430 \u0442\u0430 \u0433\u043E\u0442\u043E\u0432\u0430 \u0434\u043E \u043D\u043E\u0432\u0438\u0445 \u043F\u0440\u0438\u0433\u043E\u0434!",
+        title: "Сьогодні ми відвідали ветеринара та все виявилося добре з Пті. Вона дуже весела та готова до нових пригод!",
         img: "https://storage-api.petstory.ru/resize/0x0x80/b4/4b/0f/b44b0f2cc2384e10b95249bc70c4a073.jpeg",
         date: "21/12/2020"
-    }, 
+    }
 ];
 ()=>{
     const news = allNews.map((el)=>{});
 };
 
-},{}]},["1RB6v","8lqZg"], "8lqZg", "parcelRequired7c6")
+},{}]},["jC2qd","8lqZg"], "8lqZg", "parcelRequired7c6")
 
 //# sourceMappingURL=index.975ef6c8.js.map
