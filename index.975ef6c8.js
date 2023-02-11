@@ -561,7 +561,6 @@ var _mainGallary = require("./js/main-gallary");
 var _translate = require("./js/translate");
 var _burgerMenu = require("./js/burger-menu");
 var _news = require("./js/news");
-console.log("new");
 
 },{"./js/main-gallary":"lneWe","./js/translate":"cybGd","./js/burger-menu":"egJfa","./js/news":"2xmvE"}],"lneWe":[function(require,module,exports) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
@@ -595,15 +594,6 @@ const inlineGallery = (0, _lightgalleryDefault.default)(lgContainer, {
         ...CreateDynemicEl()
     ]
 });
-// document.addEventListener(
-//   'scroll',
-//   () => {
-//     inlineGallery.openGallery();
-//     console.log('hell');
-//   },
-//   { once: true }
-// );
-// inlineGallery.openGallery();
 setTimeout(()=>{
     inlineGallery.openGallery();
     console.log("hell");
@@ -3093,22 +3083,18 @@ const refs = {
 };
 refs.navBtnEn.addEventListener("click", ()=>{
     localStorage.setItem("lang", "en");
-    // ChangeLang();
     location.reload();
 });
 refs.navBtnUa.addEventListener("click", ()=>{
     localStorage.setItem("lang", "ua");
-    // ChangeLang();
     location.reload();
 });
 refs.menuBtnEn.addEventListener("click", ()=>{
     localStorage.setItem("lang", "en");
-    // ChangeLang();
     location.reload();
 });
 refs.menuBtnUa.addEventListener("click", ()=>{
     localStorage.setItem("lang", "ua");
-    // ChangeLang();
     location.reload();
 });
 function ChangeLang() {

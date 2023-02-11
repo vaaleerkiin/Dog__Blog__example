@@ -2043,12 +2043,8 @@ body:not(.lg-from-hash) .lg-outer.lg-start-zoom .lg-item:not(.lg-zoomable).lg-co
 }
 
 .lg-outer.lg-grab img.lg-object {
+  object-fit: contain;
   border-radius: 5px;
-}
-
-.swiper {
-  width: 600px;
-  height: 300px;
 }
 
 .soc {
